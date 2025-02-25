@@ -1,78 +1,39 @@
-import { invokeTauri } from "@/adapters/tauri";
+import { ExportDialog } from "@/components/export-dialog";
+import { SettingsDialog } from "@/components/settings-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useConnect } from "@/hooks/useConnect";
 import { useData } from "@/hooks/useData";
-// import { useSettings } from "@/hooks/useSettings";
-import { SettingsDialog } from "@/components/settings-dialog";
-import { useTower } from "@/hooks/useTower";
+import { useSettings } from "@/hooks/useSettings";
 import NumberFlow from "@number-flow/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Minus, Play, Plus, Settings } from "lucide-react";
+import { Minus, Plus, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { DestilationPlate } from "./destilation-plate";
 
 export function TowerSection() {
-  const { plates, addPlate, removePlate, MAX_PLATES } = useTower();
+  const { addPlate, removePlate, MAX_PLATES, settings } = useSettings();
   const [disableButton, setDisableButton] = useState(false);
-  // const { settings } = useSettings();
-  const setConnected = useData((state) => state.setConnected);
-  const setLoading = useData((state) => state.setLoading);
-  const isLoading = useData((state) => state.isLoading);
-  const connected = useData((state) => state.connected);
-  const clearData = useData((state) => state.clearData);
+  const loading = useConnect((state) => state.loading);
+  const connected = useConnect((state) => state.connected);
+  const connect = useConnect((state) => state.connect);
+  const disconnect = useConnect((state) => state.disconnect);
   const lastData = useData((state) => state.columnData.at(-1));
+  const plates = settings.numberPlates;
 
   useEffect(() => {
-    if (plates === 1 || plates === MAX_PLATES) {
-      return;
-    }
+    if (plates === 1 || plates === MAX_PLATES) return;
     setDisableButton(true);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setDisableButton(false);
     }, 300);
-  }, [plates]);
+    return () => clearTimeout(timer);
+  }, [settings]);
 
   const handleConnect = async () => {
-    setLoading(true);
-    if (connected) {
-      try {
-        await invokeTauri("disconnect_modbus");
-        clearData();
-        setConnected(false);
-        return;
-      } catch (error) {
-        console.log("Error in disconnect modbus: ", error);
-        toast.error("Error in disconnect");
-        return;
-      } finally {
-        setLoading(false);
-      }
-    }
-    toast.promise(
-      invokeTauri("connect_modbus", {
-        port: "/dev/cu.usbserial-1140",
-        baudRate: 9600,
-      }),
-      {
-        loading: "Connecting...",
-        success: () => {
-          setConnected(true);
-          return "Connected";
-        },
-        error: (error) => {
-          console.log(error);
-          if (error === "Already connected") {
-            setConnected(true);
-            return "Already connected";
-          }
-          setConnected(false);
-          return "Connection error";
-        },
-        finally: () => setLoading(false),
-      },
-    );
+    connected ? await disconnect() : await connect(settings);
   };
+
   return (
     <section className="row-span-2 flex flex-col items-center rounded-lg border">
       <header className="flex h-10 w-full items-center justify-between rounded-t-lg bg-slate-100 px-1">
@@ -165,23 +126,17 @@ export function TowerSection() {
           <Button
             variant={"outline"}
             onClick={handleConnect}
-            disabled={isLoading}
+            disabled={loading}
           >
             {connected ? "Disconnect" : "Connect"}
           </Button>
         </div>
         <div className="flex items-center justify-center">
-          <Button variant={"outline"} className="rounded-r-none">
-            Select file
-          </Button>
-          <Button
-            variant={"outline"}
-            size={"icon"}
-            className="rounded-l-none border-l-0"
-            disabled
-          >
-            <Play className="h-6 w-6" />
-          </Button>
+          <ExportDialog>
+            <Button variant={"outline"} className="rounded-r-none">
+              {connected ? "Save file" : "Select file"}
+            </Button>
+          </ExportDialog>
         </div>
       </footer>
     </section>

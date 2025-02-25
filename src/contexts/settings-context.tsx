@@ -8,12 +8,15 @@ export const SettingsContext = createContext<SettingsContextType>(
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SettingsType>({
     temperatureAddress: {
-      t1: 100,
-      t2: 101,
+      top: 0,
+      bottom: 0,
     },
     usbPort: "",
-    baudRate: 9600,
-    unitId: 1,
+    count: 2,
+    timeout: 0,
+    baudrate: 0,
+    unitId: 0,
+    numberPlates: 1,
   });
   return (
     <SettingsContext.Provider

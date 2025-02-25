@@ -1,6 +1,5 @@
+use super::settings::SettingsState;
 use rodbus::client::*;
-use rodbus::DecodeLevel;
-use rodbus::SerialSettings;
 use rodbus::*;
 use serde::Serialize;
 use std::sync::Arc;
@@ -35,50 +34,51 @@ impl CurrentConnection {
 #[tauri::command]
 pub async fn connect_modbus(
     connection: State<'_, Arc<Mutex<CurrentConnection>>>,
-    port: String,
-    baud_rate: u32,
+    settings_state: State<'_, Arc<Mutex<SettingsState>>>,
 ) -> Result<String, String> {
     let mut current_connection = connection.lock().await;
+    let current_settings = settings_state.lock().await;
+    if let Some(current_settings) = &current_settings.settings {
+        if current_connection.is_connected() {
+            return Err("Already connected".into());
+        }
 
-    if current_connection.is_connected() {
-        return Err("Already connected".into());
-    }
+        let settings = SerialSettings {
+            baud_rate: current_settings.baudrate,
+            data_bits: rodbus::DataBits::Eight,
+            stop_bits: rodbus::StopBits::One,
+            parity: rodbus::Parity::None,
+            flow_control: rodbus::FlowControl::None,
+        };
 
-    let settings = SerialSettings {
-        baud_rate,
-        data_bits: rodbus::DataBits::Eight,
-        stop_bits: rodbus::StopBits::One,
-        parity: rodbus::Parity::None,
-        flow_control: rodbus::FlowControl::None,
-    };
+        let mut channel = client::spawn_rtu_client_task(
+            &current_settings.usb_port,
+            settings,
+            1,
+            default_retry_strategy(),
+            DecodeLevel::default(),
+            None,
+        );
 
-    let mut channel = client::spawn_rtu_client_task(
-        &port,
-        settings,
-        1,
-        default_retry_strategy(),
-        DecodeLevel::default(),
-        None,
-    );
+        if let Err(err) = channel.enable().await {
+            return Err(format!("Failed to enable connection {:?}", err));
+        }
 
-    if let Err(err) = channel.enable().await {
-        return Err(format!("Failed to enable connection {:?}", err));
-    }
-
-    let params = RequestParam::new(UnitId::new(10), std::time::Duration::from_secs(1));
-    for attempt in 1..=3 {
-        match channel
-            .read_coils(params, AddressRange::try_from(1, 1).unwrap())
-            .await
-        {
-            Ok(_) => {
-                current_connection.set_connection(channel);
-                return Ok("Connected successfully".into());
-            }
-            Err(err) => {
-                println!("Attempt {}/3 failed: {:?}", attempt, err);
-                if attempt < 3 {
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await
+        let params = RequestParam::new(UnitId::new(10), std::time::Duration::from_secs(1));
+        for attempt in 1..=3 {
+            match channel
+                .read_coils(params, AddressRange::try_from(1, 1).unwrap())
+                .await
+            {
+                Ok(_) => {
+                    current_connection.set_connection(channel);
+                    return Ok("Connected successfully".into());
+                }
+                Err(err) => {
+                    println!("Attempt {}/3 failed: {:?}", attempt, err);
+                    if attempt < 3 {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await
+                    }
                 }
             }
         }
@@ -120,35 +120,39 @@ pub async fn read_holding_registers(
     count: u16,
     timeout: u64,
     unit_id: u8,
-) -> Result<RegisterResponse, String> {
-    let current_connection = connection_state.lock().await;
+) -> Result<Vec<RegisterResponse>, String> {
+    let channel = {
+        let current_connection = connection_state.lock().await;
+        current_connection.connection.clone()
+    };
 
-    if let Some(channel) = &current_connection.connection {
-        let params = RequestParam::new(
-            UnitId::new(unit_id),
-            std::time::Duration::from_secs(timeout),
-        );
+    let Some(channel) = channel else {
+        return Err("No active connection".into());
+    };
 
-        let mut cnx = channel.lock().await;
-        match cnx
-            .read_holding_registers(params, AddressRange::try_from(address, count).unwrap())
-            .await
-        {
-            Ok(response) => {
-                if let Some(first) = response.get(0) {
-                    Ok(RegisterResponse {
-                        index: first.index,
-                        value: first.value,
-                    })
-                } else {
-                    Err("No registers found".into())
-                }
-            }
-            Err(err) => Err(format!("Read error: {:?}", err)),
-        }
-    } else {
-        Err("No active connection".into())
-    }
+    let params = RequestParam::new(
+        UnitId::new(unit_id),
+        std::time::Duration::from_secs(timeout),
+    );
+    let address_range = AddressRange::try_from(address, count)
+        .map_err(|e| format!("Invalid address range: {:?}", e))?;
+
+    let mut cnx = channel.lock().await;
+
+    let response = cnx
+        .read_holding_registers(params, address_range)
+        .await
+        .map_err(|e| format!("Error reading Modbus device: {:?}", e))?;
+
+    let registers: Vec<RegisterResponse> = response
+        .iter()
+        .map(|r| RegisterResponse {
+            index: r.index,
+            value: r.value,
+        })
+        .collect();
+
+    Ok(registers)
 }
 
 #[tauri::command]
@@ -244,7 +248,13 @@ pub async fn available_ports() -> Result<Vec<String>, String> {
             let port_names: Vec<String> = ports
                 .into_iter()
                 .filter_map(|port| match port.port_type {
-                    serialport::SerialPortType::UsbPort(_) => Some(port.port_name),
+                    serialport::SerialPortType::UsbPort(_) => {
+                        if port.port_name.starts_with("/dev/tty.") {
+                            None
+                        } else {
+                            Some(port.port_name)
+                        }
+                    }
                     _ => None,
                 })
                 .collect();

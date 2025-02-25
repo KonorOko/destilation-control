@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/chart";
 import { useData } from "@/hooks/useData";
 import { useEffect, useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 const chartDataEmpty: Record<string, string | undefined>[] = [
   {
@@ -18,8 +18,11 @@ export function TemperaturesChart() {
   const columnData = useData((state) => state.columnData);
   const columnDataFormatted = useMemo(
     () =>
-      columnData.slice(-240).map((entry) => {
+      columnData.map((entry) => {
         const initialDate = columnData[0]?.timestamp;
+        if (!initialDate) {
+          return { time: undefined };
+        }
         const transcurredTime = entry.timestamp - initialDate;
 
         const minutes = Math.floor(transcurredTime / 60);
@@ -66,18 +69,12 @@ export function TemperaturesChart() {
         }}
       >
         <CartesianGrid vertical={false} />
+        <YAxis domain={[15, 40]} hide />
         <XAxis
           dataKey="time"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          interval={0}
-          tickFormatter={(date) => {
-            if (date.endsWith("00") || date.endsWith("30")) {
-              return date;
-            }
-            return "";
-          }}
         />
         <ChartTooltip
           cursor={false}
@@ -91,6 +88,7 @@ export function TemperaturesChart() {
             type="monotone"
             stroke={`hsl(220, 100%, ${40 + index * 10}%)`}
             strokeWidth={2}
+            isAnimationActive={false}
             dot={false}
           />
         ))}

@@ -13,13 +13,10 @@ impl SettingsState {
     pub fn set_settings(&mut self, settings: Settings) {
         self.settings = Some(settings);
     }
-
-    pub fn settings_exists(&self) -> bool {
-        self.settings.is_some()
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub usb_port: String,
     pub baudrate: u32,
@@ -27,6 +24,7 @@ pub struct Settings {
     pub count: u16,
     pub timeout: u64,
     pub unit_id: u8,
+    pub number_plates: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -61,17 +59,17 @@ pub async fn ensure_settings_file(app_handle: AppHandle) -> String {
 }
 
 #[tauri::command]
-pub async fn save_settings(app_handle: AppHandle, new_settings: Settings) {
+pub async fn save_settings(app_handle: AppHandle, settings: Settings) {
     let app_data_dir = ensure_settings_file(app_handle).await;
-    let settings_json = serde_json::to_string(&new_settings).unwrap();
+    let settings_json = serde_json::to_string(&settings).unwrap();
     match fs::write(app_data_dir, settings_json) {
-        Ok(_) => println!("Settings saved: {:?}", new_settings),
+        Ok(_) => println!("Settings saved: {:?}", settings),
         Err(e) => println!("Error saving settings: {:?}", e),
     }
 }
 
 #[tauri::command]
-pub async fn load_settings(
+pub async fn get_settings(
     app_handle: AppHandle,
     settings_state: State<'_, Arc<Mutex<SettingsState>>>,
 ) -> Result<Settings, Settings> {

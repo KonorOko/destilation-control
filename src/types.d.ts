@@ -1,11 +1,14 @@
 export type SettingsType = {
-  temperatureAddress: {
-    t1: number;
-    t2: number;
-  };
   usbPort: string;
-  baudRate: number;
+  baudrate: number;
+  temperatureAddress: {
+    top: number;
+    bottom: number;
+  };
+  count: number;
+  timeout: number;
   unitId: number;
+  numberPlates: number;
 };
 
 export type SettingsContextType = {
