@@ -12,3 +12,5 @@ export const DEFAULT_SETTINGS: SettingsType = {
   timeout: 1000,
   numberPlates: 1,
 };
+
+export const MAX_DATA_LENGTH = 120;

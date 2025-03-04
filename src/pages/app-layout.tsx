@@ -17,7 +17,7 @@ export function AppLayout() {
   }
 
   return (
-    <main className="flex min-h-screen bg-background p-1">
+    <main className="flex min-h-screen p-1">
       <Outlet />
     </main>
   );

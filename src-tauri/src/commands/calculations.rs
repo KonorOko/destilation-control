@@ -4,40 +4,36 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use crate::TransmissionState;
+
 use super::modbus_serial::{read_holding_registers, CurrentConnection};
 use super::settings::SettingsState;
 
-#[derive(Default, Clone, Serialize)]
-pub struct ColumnDataEntry {
+#[derive(Clone)]
+pub enum DataSource {
+    Live,
+    Playback {
+        index: u64,
+        data: Vec<Arc<ColumnEntry>>,
+    },
+}
+
+#[derive(Default, Clone, Serialize, Debug)]
+pub struct ColumnEntry {
     pub timestamp: u64,
     pub temperatures: Vec<f64>,
     pub compositions: Vec<f64>,
 }
 
 #[derive(Default, Clone, Serialize)]
-pub struct ColumnData {
-    pub history: Vec<ColumnDataEntry>,
-}
-
-impl ColumnData {
-    pub fn add_entry(&mut self, temperatures: Vec<f64>, compositions: Vec<f64>) {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        self.history.push(ColumnDataEntry {
-            timestamp,
-            temperatures,
-            compositions,
-        });
-    }
+pub struct MeasurementHistory {
+    pub history: Vec<Arc<ColumnEntry>>,
 }
 
 async fn read_temperatures(
-    settings_state: State<'_, Arc<Mutex<SettingsState>>>,
-    connection_state: State<'_, Arc<Mutex<CurrentConnection>>>,
+    settings_state: State<'_, Mutex<SettingsState>>,
+    connection_state: State<'_, Mutex<CurrentConnection>>,
 ) -> Result<Vec<f64>, String> {
-    println!("Reading temperatures");
     let settings = {
         let current_settings = settings_state.lock().await;
         current_settings.settings.clone()
@@ -47,7 +43,7 @@ async fn read_temperatures(
     };
 
     let temperatures = read_holding_registers(
-        connection_state.clone(),
+        connection_state,
         settings.temperature_address.bottom,
         settings.count,
         settings.timeout,
@@ -79,53 +75,102 @@ fn interpolate_temperatures(num_plates: usize, t1: f64, tn: f64) -> Vec<f64> {
 
 pub async fn send_column_data(
     app_handle: AppHandle,
-    settings_state: State<'_, Arc<Mutex<SettingsState>>>,
-    connection_state: State<'_, Arc<Mutex<CurrentConnection>>>,
-    column_data_state: State<'_, Arc<Mutex<ColumnData>>>,
-) {
-    println!("\nSending column data...");
-    let temperatures = match read_temperatures(settings_state.clone(), connection_state).await {
-        Ok(temps) => temps,
-        Err(err) => {
-            println!("Error reading temperatures: {}", err);
-            vec![0.0 as f64, 0.0 as f64]
-        }
-    };
+    settings_state: State<'_, Mutex<SettingsState>>,
+    connection_state: State<'_, Mutex<CurrentConnection>>,
+    measurement_history_state: State<'_, Mutex<MeasurementHistory>>,
+    data_source_state: State<'_, Mutex<DataSource>>,
+) -> Result<(), String> {
+    println!("\nInitializing send_column_data...");
 
-    let settings = {
-        let current_settings = settings_state.lock().await;
-        current_settings.settings.clone()
-    };
+    let data_entry =
+        get_column_data(&settings_state, &connection_state, &data_source_state).await?;
 
-    let Some(settings) = settings else {
-        return {};
-    };
-
-    println!("Settings: {:?}", settings);
-
-    println!("Temperatures: {:?}", temperatures);
-
-    let interpolate_temps =
-        interpolate_temperatures(settings.number_plates, temperatures[0], temperatures[1]);
-
-    println!("Interpolated temperatures: {:?}", interpolate_temps);
-
-    let compositions = calculate_compositions(interpolate_temps.clone());
-
-    println!("Compositions: {:?}", compositions);
-
-    let mut current_column_data = column_data_state.lock().await;
-
-    current_column_data.add_entry(interpolate_temps, compositions);
-
-    let mut format_data = current_column_data.clone();
-    let lenght_history = format_data.history.len();
-    if lenght_history > 240 {
-        format_data.history = format_data.history.split_off(lenght_history - 240);
+    {
+        let mut history = measurement_history_state.lock().await;
+        history.history.push(data_entry.clone());
     }
-    app_handle.emit("column_data", format_data).unwrap()
+
+    println!("Emitting data: {:?}", data_entry);
+    if let Err(e) = app_handle.emit("column_data", data_entry) {
+        return Err(format!("Failed to emit data: {}", e));
+    };
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn active_column_data(
+    transmission_state: State<'_, Mutex<TransmissionState>>,
+) -> Result<(), String> {
+    println!("Starting column data");
+    let mut transmission_state = transmission_state.lock().await;
+    transmission_state.is_running = true;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_column_data(
+    transmission_state: State<'_, Mutex<TransmissionState>>,
+) -> Result<(), String> {
+    println!("Canceling column data");
+    let mut transmission_state = transmission_state.lock().await;
+    transmission_state.is_running = false;
+
+    Ok(())
 }
 
 fn calculate_compositions(_temperatures: Vec<f64>) -> Vec<f64> {
-    return vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    vec![0.0, 0.0, 0.0]
+}
+
+async fn get_column_data(
+    settings_state: &State<'_, Mutex<SettingsState>>,
+    connection_state: &State<'_, Mutex<CurrentConnection>>,
+    data_source_state: &State<'_, Mutex<DataSource>>,
+) -> Result<Arc<ColumnEntry>, String> {
+    let mut ds = data_source_state.lock().await;
+
+    match &mut *ds {
+        DataSource::Playback { index, data } => {
+            if (*index as usize) < data.len() {
+                let entry = data[*index as usize].clone();
+                *index += 1;
+                Ok(entry)
+            } else {
+                Err("No more playback data available".into())
+            }
+        }
+        DataSource::Live => {
+            let temperatures = read_temperatures(settings_state.clone(), connection_state.clone())
+                .await
+                .map_err(|_| "Failed to read temperatures".to_string())?;
+
+            let settings = {
+                let current_settings = settings_state.lock().await;
+                current_settings.settings.clone()
+            }
+            .ok_or("No settings found".to_string())?;
+
+            println!("Settings: {:?}", settings);
+            println!("Temperatures: {:?}", temperatures);
+
+            let interpolate_temps =
+                interpolate_temperatures(settings.number_plates, temperatures[0], temperatures[1]);
+
+            println!("Interpolated temperatures: {:?}", interpolate_temps);
+
+            let compositions = calculate_compositions(interpolate_temps.clone());
+
+            println!("Compositions: {:?}", compositions);
+
+            Ok(Arc::new(ColumnEntry {
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                temperatures: interpolate_temps,
+                compositions,
+            }))
+        }
+    }
 }

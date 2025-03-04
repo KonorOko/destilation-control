@@ -33,8 +33,8 @@ impl CurrentConnection {
 
 #[tauri::command]
 pub async fn connect_modbus(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
-    settings_state: State<'_, Arc<Mutex<SettingsState>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
+    settings_state: State<'_, Mutex<SettingsState>>,
 ) -> Result<String, String> {
     let mut current_connection = connection.lock().await;
     let current_settings = settings_state.lock().await;
@@ -89,7 +89,7 @@ pub async fn connect_modbus(
 
 #[tauri::command]
 pub async fn is_connected(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
 ) -> Result<String, String> {
     let current_connection = connection.lock().await;
     if current_connection.is_connected() {
@@ -101,7 +101,7 @@ pub async fn is_connected(
 
 #[tauri::command]
 pub async fn disconnect_modbus(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
 ) -> Result<String, String> {
     let mut current_connection = connection.lock().await;
 
@@ -115,7 +115,7 @@ pub async fn disconnect_modbus(
 
 #[tauri::command]
 pub async fn read_holding_registers(
-    connection_state: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection_state: State<'_, Mutex<CurrentConnection>>,
     address: u16,
     count: u16,
     timeout: u64,
@@ -157,7 +157,7 @@ pub async fn read_holding_registers(
 
 #[tauri::command]
 pub async fn write_single_register(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
     value: u16,
     address: u16,
     timeout: u64,
@@ -185,7 +185,7 @@ pub async fn write_single_register(
 
 #[tauri::command]
 pub async fn write_single_coil(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
     value: bool,
     address: u16,
     timeout: u64,
@@ -214,7 +214,7 @@ pub async fn write_single_coil(
 
 #[tauri::command]
 pub async fn read_coils(
-    connection: State<'_, Arc<Mutex<CurrentConnection>>>,
+    connection: State<'_, Mutex<CurrentConnection>>,
     address: u16,
     count: u16,
     timeout: u64,

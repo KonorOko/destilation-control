@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { SettingsProvider } from "@/contexts/settings-context";
 import { AppLayout } from "@/pages/app-layout";
-import { DashboardPage } from "@/pages/dashboard/dashboard-page";
+import { DashboardPage } from "@/pages/dashboard-page";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "./index.css";
 

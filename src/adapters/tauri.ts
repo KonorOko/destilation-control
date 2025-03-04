@@ -13,7 +13,11 @@ type CommandType =
   | "save_settings"
   | "get_settings"
   | "export_data"
-  | "dialog_path";
+  | "import_data"
+  | "folder_path"
+  | "file_path"
+  | "active_column_data"
+  | "cancel_column_data";
 
 export const invokeTauri = async <T>(
   command: CommandType,

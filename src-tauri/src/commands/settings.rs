@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
@@ -71,7 +70,7 @@ pub async fn save_settings(app_handle: AppHandle, settings: Settings) {
 #[tauri::command]
 pub async fn get_settings(
     app_handle: AppHandle,
-    settings_state: State<'_, Arc<Mutex<SettingsState>>>,
+    settings_state: State<'_, Mutex<SettingsState>>,
 ) -> Result<Settings, Settings> {
     println!("Loading settings...");
     let app_data_dir = ensure_settings_file(app_handle).await;
