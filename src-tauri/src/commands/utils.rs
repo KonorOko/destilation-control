@@ -23,8 +23,11 @@ pub async fn import_data(
         .worksheet_range(&worksheet_name)
         .map_err(|_| "Can't read sheet")
         .unwrap();
+    let total_rows = range.rows().count();
 
-    for row in range.rows().skip(1) {
+    for (index, row) in range.rows().skip(1).enumerate() {
+        println!("Processing row {}", index);
+        let percentage_complete = index as f64 / total_rows as f64 * 100.0;
         if row.is_empty() {
             continue;
         }
@@ -56,10 +59,12 @@ pub async fn import_data(
         println!("Timestamp {}", timestamp);
         println!("Temperatures {:?}", temperatures);
         println!("Compositions {:?}", compositions);
+
         imported_data.push(Arc::new(ColumnEntry {
             timestamp,
             temperatures,
             compositions,
+            percentage_complete,
         }));
     }
     {

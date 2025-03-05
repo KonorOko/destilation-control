@@ -1,11 +1,19 @@
-export function StatusLed({ connected }: { connected: boolean }) {
-  if (connected) {
-    return (
-      <div className="ml-4 size-3 rounded-full border bg-green-400/50 shadow-lg"></div>
-    );
-  } else {
-    return (
-      <div className="ml-4 size-3 rounded-full border bg-slate-400/50 shadow-lg"></div>
-    );
-  }
+import { cn } from "@/lib/utils";
+
+export function StatusLed({
+  connected,
+  className,
+}: {
+  connected: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "size-3 rounded-full border border-white shadow-lg",
+        connected ? "bg-green-300" : "bg-slate-300",
+        className,
+      )}
+    ></div>
+  );
 }
