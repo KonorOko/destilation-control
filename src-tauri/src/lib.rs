@@ -1,7 +1,6 @@
 mod commands;
-use commands::calculations::{
-    cancel_column_data, pause_column_data, send_column_data, DataSource, MeasurementHistory,
-};
+use commands::data_manager::{DataSource, MeasurementHistory};
+use commands::emitter::{cancel_column_data, pause_column_data, send_column_data};
 use commands::modbus_serial::{
     available_ports, connect_modbus, disconnect_modbus, is_connected, read_coils,
     read_holding_registers, write_single_coil, write_single_register, CurrentConnection,
@@ -25,7 +24,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .manage(settings)

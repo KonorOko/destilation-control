@@ -1,39 +1,65 @@
-use crate::TransmissionState;
-use serde::Serialize;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
-use tokio::time::Duration;
-
 use super::modbus_serial::{read_holding_registers, CurrentConnection};
 use super::settings::SettingsState;
+use std::f64::consts::E;
+use tauri::State;
+use tokio::sync::Mutex;
 
-#[derive(Clone)]
-pub enum DataSource {
-    Live,
-    Playback {
-        index: u64,
-        data: Vec<Arc<ColumnEntry>>,
-    },
+pub fn calculate_composition(x_0: f64, temp: f64, tol: f64, max_iter: u64) -> Result<f64, String> {
+    let mut x = x_0;
+    const H: f64 = 1e-5;
+
+    for _ in 0..max_iter {
+        let fx = calculate_residual(x, temp);
+        let fx_prime =
+            (calculate_residual(x + H, temp) - calculate_residual(x - H, temp)) / (2.0 * H);
+
+        if fx_prime.abs() < 1e-12 {
+            return Err("Error. Division by zero.".to_string());
+        }
+
+        let x_next = x - fx / fx_prime;
+
+        if (x_next - x).abs() < tol {
+            return Ok(x_next);
+        }
+
+        x = x_next;
+    }
+
+    Err("No value founded".to_string())
 }
 
-#[derive(Default, Clone, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct ColumnEntry {
-    pub timestamp: u64,
-    pub temperatures: Vec<f64>,
-    pub compositions: Vec<f64>,
-    pub percentage_complete: f64,
+fn calculate_residual(x_1: f64, temp: f64) -> f64 {
+    // Parameters Ethanol (1) - Water (2)
+    const A1: f64 = 8.12875;
+    const B1: f64 = 1660.8713;
+    const C1: f64 = 238.131;
+    const AVAN1: f64 = 1.6798;
+
+    const A2: f64 = 8.05573;
+    const B2: f64 = 1723.6425;
+    const C2: f64 = 233.08;
+    const AVAN2: f64 = 0.9227;
+
+    const P: f64 = 585.0;
+    let x_2 = 1.0 - x_1;
+
+    let (gamma_1, gamma_2) = calculate_gammas(AVAN1, AVAN2, x_1, x_2);
+
+    let ps_1 = calculate_ps(temp, A1, B1, C1);
+    let ps_2 = calculate_ps(temp, A2, B2, C2);
+
+    let k_1 = calculate_ks(gamma_1, ps_1, P);
+    let k_2 = calculate_ks(gamma_2, ps_2, P);
+
+    let y1 = calculate_y(k_1, x_1);
+    let y2 = calculate_y(k_2, x_2);
+
+    return y1 + y2 - 1.0;
 }
 
-#[derive(Default, Clone, Serialize)]
-pub struct MeasurementHistory {
-    pub history: Vec<Arc<ColumnEntry>>,
-}
-
-async fn read_temperatures(
-    settings_state: State<'_, Mutex<SettingsState>>,
+pub async fn read_temperatures(
+    settings_state: &State<'_, Mutex<SettingsState>>,
     connection_state: State<'_, Mutex<CurrentConnection>>,
 ) -> Result<Vec<f64>, String> {
     let settings = {
@@ -63,7 +89,7 @@ async fn read_temperatures(
     return Ok(vec![temperature_bottom_format, temperature_top_format]);
 }
 
-fn interpolate_temperatures(num_plates: usize, t1: f64, tn: f64) -> Vec<f64> {
+pub fn interpolate_temperatures(num_plates: usize, t1: f64, tn: f64) -> Vec<f64> {
     if num_plates <= 2 {
         return vec![t1, tn];
     }
@@ -75,128 +101,24 @@ fn interpolate_temperatures(num_plates: usize, t1: f64, tn: f64) -> Vec<f64> {
     interpolated_temps
 }
 
-#[tauri::command]
-pub async fn send_column_data(
-    app_handle: AppHandle,
-    settings_state: State<'_, Mutex<SettingsState>>,
-    connection_state: State<'_, Mutex<CurrentConnection>>,
-    measurement_history_state: State<'_, Mutex<MeasurementHistory>>,
-    data_source_state: State<'_, Mutex<DataSource>>,
-    transmission_state: State<'_, Mutex<TransmissionState>>,
-) -> Result<(), String> {
-    println!("\nInitializing send_column_data...");
-    {
-        let mut transmission_state = transmission_state.lock().await;
-        transmission_state.is_running = true;
-    }
-    loop {
-        {
-            let transmission_state = transmission_state.lock().await;
-            println!("Transmission state: {:?}", transmission_state);
-            if !transmission_state.is_running {
-                return Ok(());
-            }
-        }
+fn calculate_ps(temperature: f64, a: f64, b: f64, c: f64) -> f64 {
+    let log10_p: f64 = a - b / (c + temperature);
 
-        let data_entry =
-            get_column_data(&settings_state, &connection_state, &data_source_state).await?;
-
-        {
-            let mut history = measurement_history_state.lock().await;
-            history.history.push(data_entry.clone());
-        }
-
-        println!("Emitting data: {:?}", data_entry);
-        if let Err(e) = app_handle.emit("column_data", data_entry) {
-            return Err(format!("Failed to emit data: {}", e));
-        };
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
+    let p = 10.0f64.powf(log10_p);
+    return p;
 }
 
-#[tauri::command]
-pub async fn cancel_column_data(
-    transmission_state: State<'_, Mutex<TransmissionState>>,
-    data_source_state: State<'_, Mutex<DataSource>>,
-) -> Result<(), String> {
-    println!("Canceling column data");
-    let mut transmission_state = transmission_state.lock().await;
-    transmission_state.is_running = false;
-    let mut ds = data_source_state.lock().await;
-
-    match &mut *ds {
-        DataSource::Playback { index, data } => {
-            *index = 0;
-            *data = Vec::new();
-        }
-        DataSource::Live => {}
-    }
-    Ok(())
+fn calculate_gammas(a_12: f64, a_21: f64, x_1: f64, x_2: f64) -> (f64, f64) {
+    let denominator = a_12 * x_1 + a_21 * x_2;
+    let gamma1 = E.powf(a_12 * (a_21 * x_2 / denominator).powf(2.0));
+    let gamma2 = E.powf(a_21 * (a_12 * x_1 / denominator).powf(2.0));
+    (gamma1, gamma2)
 }
 
-#[tauri::command]
-pub async fn pause_column_data(
-    transmission_state: State<'_, Mutex<TransmissionState>>,
-) -> Result<(), String> {
-    println!("Pausing column data");
-    let mut transmission_state = transmission_state.lock().await;
-    transmission_state.is_running = false;
-    Ok(())
+fn calculate_ks(gamma: f64, ps: f64, p: f64) -> f64 {
+    return gamma * ps / p;
 }
 
-fn calculate_compositions(_temperatures: Vec<f64>) -> Vec<f64> {
-    vec![0.0, 0.0, 0.0]
-}
-
-async fn get_column_data(
-    settings_state: &State<'_, Mutex<SettingsState>>,
-    connection_state: &State<'_, Mutex<CurrentConnection>>,
-    data_source_state: &State<'_, Mutex<DataSource>>,
-) -> Result<Arc<ColumnEntry>, String> {
-    let mut ds = data_source_state.lock().await;
-
-    match &mut *ds {
-        DataSource::Playback { index, data } => {
-            if (*index as usize) < data.len() {
-                let entry = data[*index as usize].clone();
-                *index += 1;
-                Ok(entry)
-            } else {
-                Err("No more playback data available".into())
-            }
-        }
-        DataSource::Live => {
-            let temperatures = read_temperatures(settings_state.clone(), connection_state.clone())
-                .await
-                .map_err(|_| "Failed to read temperatures".to_string())?;
-
-            let settings = {
-                let current_settings = settings_state.lock().await;
-                current_settings.settings.clone()
-            }
-            .ok_or("No settings found".to_string())?;
-
-            println!("Settings: {:?}", settings);
-            println!("Temperatures: {:?}", temperatures);
-
-            let interpolate_temps =
-                interpolate_temperatures(settings.number_plates, temperatures[0], temperatures[1]);
-
-            println!("Interpolated temperatures: {:?}", interpolate_temps);
-
-            let compositions = calculate_compositions(interpolate_temps.clone());
-
-            println!("Compositions: {:?}", compositions);
-
-            Ok(Arc::new(ColumnEntry {
-                timestamp: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-                temperatures: interpolate_temps,
-                compositions,
-                percentage_complete: 0.0,
-            }))
-        }
-    }
+fn calculate_y(k: f64, x: f64) -> f64 {
+    return k * x;
 }

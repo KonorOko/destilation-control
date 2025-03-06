@@ -1,3 +1,4 @@
+use super::data_manager::DataSource;
 use super::settings::SettingsState;
 use rodbus::client::*;
 use rodbus::*;
@@ -35,6 +36,7 @@ impl CurrentConnection {
 pub async fn connect_modbus(
     connection: State<'_, Mutex<CurrentConnection>>,
     settings_state: State<'_, Mutex<SettingsState>>,
+    data_source_state: State<'_, Mutex<DataSource>>,
 ) -> Result<String, String> {
     let mut current_connection = connection.lock().await;
     let current_settings = settings_state.lock().await;
@@ -72,6 +74,8 @@ pub async fn connect_modbus(
             {
                 Ok(_) => {
                     current_connection.set_connection(channel);
+                    let mut ds = data_source_state.lock().await;
+                    *ds = DataSource::Live;
                     return Ok("Connected successfully".into());
                 }
                 Err(err) => {

@@ -15,8 +15,9 @@
         "title": "destilation-control",
         "width": 1024,
         "height": 600,
-        "minWidth": 1024,
-        "minHeight": 600
+        "minWidth": 1224,
+        "minHeight": 800,
+        "maximized": true
       }
     ],
     "security": {

@@ -987,6 +987,7 @@ name = "destilation-control"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "log",
  "modbus",
  "rodbus",
  "rust_xlsxwriter",

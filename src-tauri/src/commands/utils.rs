@@ -1,4 +1,4 @@
-use super::calculations::{ColumnEntry, DataSource, MeasurementHistory};
+use super::data_manager::{ColumnEntry, DataSource, MeasurementHistory};
 use calamine::{open_workbook, DataType, Reader, Xlsx};
 use rust_xlsxwriter::{Workbook, XlsxError};
 use std::sync::Arc;
