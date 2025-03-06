@@ -22,6 +22,7 @@ interface DataState {
   setLoading: (isLoading: boolean) => void;
   setFilePath: (filePath: string) => void;
   clearData: () => Promise<void>;
+  getTemperatureByIndex: (index: number) => string;
 }
 
 export const useData = create<DataState>((set) => ({
@@ -45,6 +46,12 @@ export const useData = create<DataState>((set) => ({
         fileProgress: columnData.percentageComplete,
       };
     }, true);
+  },
+  getTemperatureByIndex: (index: number) => {
+    const lastEntry = useData.getState().columnData.at(-1) as
+      | ColumnDataEntry
+      | undefined;
+    return lastEntry?.temperatures[index].toFixed(2) || "0.0";
   },
   setConnected: (connected: DataMode) => set(() => ({ connected })),
   setLoading: (isLoading: boolean) => set((state) => ({ ...state, isLoading })),

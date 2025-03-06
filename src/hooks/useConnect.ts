@@ -37,7 +37,6 @@ export const useConnect = create<ConnectState>((set) => ({
         return "Connected";
       },
       error: (error) => {
-        console.log("Error connecting Modbus");
         logger.error("Error connecting Modbus: ", error);
         if (error === "Already connected") {
           set({ connected: true });

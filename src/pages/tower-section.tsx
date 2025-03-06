@@ -1,23 +1,12 @@
 import { DestilationTower } from "@/components/destilation-tower";
 import { Button } from "@/components/ui/button";
-import { useConnect } from "@/hooks/useConnect";
-import { useData } from "@/hooks/useData";
 import { useSettings } from "@/hooks/useSettings";
 import { cn } from "@/lib/utils";
 import { Minus, Plus } from "lucide-react";
 
 export function TowerSection({ className }: { className?: string }) {
-  const { addPlate, removePlate, MAX_PLATES, settings } = useSettings();
-  const loading = useConnect((state) => state.loading);
-  const connected = useConnect((state) => state.connected);
-  const connect = useConnect((state) => state.connect);
-  const disconnect = useConnect((state) => state.disconnect);
-  const lastData = useData((state) => state.columnData.at(-1));
+  const { addPlate, removePlate, settings } = useSettings();
   const plates = settings.numberPlates;
-
-  const handleConnect = async () => {
-    connected ? await disconnect() : await connect(settings);
-  };
 
   return (
     <section className={cn("relative", className)}>

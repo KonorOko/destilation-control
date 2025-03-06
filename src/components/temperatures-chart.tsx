@@ -5,6 +5,8 @@ import {
 } from "@/components/ui/chart";
 import { MAX_DATA_LENGTH } from "@/constants";
 import { useData } from "@/hooks/useData";
+import { formatTime } from "@/lib/utils";
+import { ColumnDataType } from "@/pages/dashboard-page";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Label, Line, LineChart, XAxis, YAxis } from "recharts";
 import { EmptyState } from "./empty-state";
@@ -19,16 +21,17 @@ export function TemperaturesChart() {
   const [chartData, setChartData] = useState(chartDataEmpty);
   const columnData = useData((state) => state.columnData);
   const connected = useData((state) => state.connected);
-  const columnDataFormatted = useMemo(() => {
+
+  const formatData = (columnData: ColumnDataType[]) => {
     if (!columnData || columnData.length === 0) return [];
     const initialDate = columnData[0]?.timestamp;
     if (!initialDate) return [];
+
     return columnData.slice(-MAX_DATA_LENGTH).map((entry) => {
       const transcurredTime = entry.timestamp - initialDate;
-      const minutes = Math.floor(transcurredTime / 60);
-      const seconds = Math.floor(transcurredTime % 60);
+      const formattedTime = formatTime(transcurredTime);
       return {
-        time: `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
+        time: formattedTime,
         ...entry.temperatures.reduce<Record<string, number>>(
           (acc, temp, index) => {
             acc[`plate${index + 1}`] = temp;
@@ -38,12 +41,18 @@ export function TemperaturesChart() {
         ),
       };
     });
-  }, [columnData]);
+  };
+
+  const columnDataFormatted = useMemo(
+    () => formatData(columnData),
+    [columnData],
+  );
 
   const plateKeys = useMemo(() => {
     if (columnDataFormatted.length === 0) return [];
     return Object.keys(columnDataFormatted[0]).filter((key) => key !== "time");
   }, [columnDataFormatted]);
+
   const chartConfig = Object.fromEntries(
     plateKeys.map((key) => [
       key,

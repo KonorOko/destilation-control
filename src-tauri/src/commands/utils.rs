@@ -92,22 +92,20 @@ pub async fn export_data(
     };
 
     println!("Writing headers...");
-    worksheet
-        .write(0, 0, "Timestamp")
-        .map_err(|e: XlsxError| format!("Xlsx error: {}", e))?;
 
     let Some(first) = column_data.first() else {
         return Err("No current data".into());
     };
 
+    // write headers
+    worksheet
+        .write(0, 0, "Timestamp")
+        .map_err(|e: XlsxError| format!("Xlsx error: {}", e))?;
     let num_values = first.temperatures.len();
     for i in 0..num_values {
         worksheet
             .write(0, (i + 1) as u16, format!("Temperature {}", i + 1))
             .map_err(|e: XlsxError| format!("Xlsx error: {}", e))?;
-    }
-
-    for i in 0..num_values {
         worksheet
             .write(
                 0,
@@ -117,6 +115,7 @@ pub async fn export_data(
             .map_err(|e: XlsxError| format!("Xlsx error: {}", e))?;
     }
 
+    // write data
     println!("Writing data");
     for (row, value) in column_data.iter().enumerate() {
         let row = (row + 1) as u32;
