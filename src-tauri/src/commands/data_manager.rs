@@ -74,18 +74,25 @@ pub async fn get_column_data(
             let tol = 1e-6;
             let max_iter = 1000;
 
-            for (i, &temp) in interpolate_temps.iter().enumerate() {
-                let composition =
-                    calculate_composition(x_0, temp, tol, max_iter).unwrap_or_else(|e| {
-                        eprintln!("Error calculating composition at index {}: {}", i, e);
-                        if i == 0 {
-                            0.0
-                        } else {
-                            compositions[i - 1]
-                        }
-                    });
+            const MIN_T: f64 = 70.0;
+            const MAX_T: f64 = 90.0;
 
-                compositions.push(composition);
+            let valid_range = interpolate_temps.first().unwrap_or(&0.0) > &MIN_T
+                && interpolate_temps.last().unwrap_or(&0.0) < &MAX_T;
+            if valid_range {
+                for (i, &temp) in interpolate_temps.iter().enumerate() {
+                    let composition = calculate_composition(x_0, temp, tol, max_iter)
+                        .unwrap_or_else(|e| {
+                            eprintln!("Error calculating composition at index {}: {}", i, e);
+                            if i == 0 {
+                                0.0
+                            } else {
+                                compositions[i - 1]
+                            }
+                        });
+
+                    compositions.push(composition);
+                }
             }
 
             println!("Settings: {:?}", settings);

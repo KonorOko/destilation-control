@@ -1,11 +1,12 @@
-use crate::TransmissionState;
-use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
-use tokio::time::Duration;
-
 use super::data_manager::{get_column_data, DataSource, MeasurementHistory};
 use super::modbus_serial::CurrentConnection;
 use super::settings::SettingsState;
+use crate::commands::data_manager::ColumnEntry;
+use crate::TransmissionState;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::Mutex;
+use tokio::time::Duration;
 
 #[tauri::command]
 pub async fn send_column_data(
@@ -40,9 +41,7 @@ pub async fn send_column_data(
         }
 
         println!("Emitting data: {:?}", data_entry);
-        if let Err(e) = app_handle.emit("column_data", data_entry) {
-            return Err(format!("Failed to emit data: {}", e));
-        };
+        emit_column_data(&app_handle, data_entry).await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
@@ -75,4 +74,13 @@ pub async fn pause_column_data(
     let mut transmission_state = transmission_state.lock().await;
     transmission_state.is_running = false;
     Ok(())
+}
+
+async fn emit_column_data(
+    app_handle: &tauri::AppHandle,
+    entry: Arc<ColumnEntry>,
+) -> Result<(), String> {
+    app_handle
+        .emit("column_data", entry)
+        .map_err(|e| format!("Failed to emit data: {}", e))
 }

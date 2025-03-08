@@ -14,9 +14,13 @@ const animationProps = {
 };
 
 export function DestilationTower({ plates }: { plates: number }) {
-  const getTemperatureByIndex = useData((state) => state.getTemperatureByIndex);
+  const columnData = useData((state) => state.columnData);
+  const getTemperatureByIndex = (index: number) => {
+    const lastEntry = columnData.at(-1);
+    return lastEntry?.temperatures[index]?.toFixed(1) || "0.0";
+  };
   return (
-    <motion.div className="flex h-full flex-col items-center justify-center gap-1">
+    <motion.div className="flex h-full flex-col-reverse items-center justify-center gap-1">
       <AnimatePresence initial={false}>
         {[...Array(plates)].map((_, index) => (
           <motion.div

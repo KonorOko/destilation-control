@@ -1,4 +1,7 @@
+use crate::TransmissionState;
+
 use super::data_manager::DataSource;
+use super::emitter::cancel_column_data;
 use super::settings::SettingsState;
 use rodbus::client::*;
 use rodbus::*;
@@ -106,11 +109,14 @@ pub async fn is_connected(
 #[tauri::command]
 pub async fn disconnect_modbus(
     connection: State<'_, Mutex<CurrentConnection>>,
+    transmission_state: State<'_, Mutex<TransmissionState>>,
+    data_source_state: State<'_, Mutex<DataSource>>,
 ) -> Result<String, String> {
     let mut current_connection = connection.lock().await;
 
     if current_connection.is_connected() {
         current_connection.clear_connection();
+        let _ = cancel_column_data(transmission_state, data_source_state);
         Ok("Disconnected succesfully".into())
     } else {
         Err("No connection to disconnect".into())

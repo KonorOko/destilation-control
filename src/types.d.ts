@@ -20,3 +20,10 @@ export type RegisterResponseType = {
   index: number;
   value: number;
 };
+
+type ColumnDataEntry = {
+  timestamp: number;
+  temperatures: number[];
+  compositions: number[];
+  percentageComplete: number;
+};

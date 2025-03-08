@@ -15,7 +15,7 @@ export function TemperaturesSection({ className }: { className?: string }) {
         <CardTitle>Temperatures</CardTitle>
         <CardDescription>Chart of temperatures per plate</CardDescription>
       </CardHeader>
-      <CardContent className="flex h-full items-center justify-center overflow-auto border-t">
+      <CardContent className="border-t py-10">
         <TemperaturesChart />
       </CardContent>
     </Card>

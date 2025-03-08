@@ -15,7 +15,7 @@ export function CompositionsSection({ className }: { className?: string }) {
         <CardTitle>T vs x, y</CardTitle>
         <CardDescription>Chart of compositions</CardDescription>
       </CardHeader>
-      <CardContent className="flex h-full items-center justify-center border-t">
+      <CardContent className="border-t p-6 pb-0">
         <EmptyState />
       </CardContent>
     </Card>

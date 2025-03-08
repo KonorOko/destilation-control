@@ -3,9 +3,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { MAX_DATA_LENGTH } from "@/constants";
 import { useData } from "@/hooks/useData";
-import { formatTime } from "@/lib/utils";
 import { ColumnDataType } from "@/pages/dashboard-page";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Label, Line, LineChart, XAxis, YAxis } from "recharts";
@@ -17,30 +15,13 @@ const chartDataEmpty: Record<string, string | undefined>[] = [
   },
 ];
 
-export function TemperaturesChart() {
+export function CompositionsChart() {
   const [chartData, setChartData] = useState(chartDataEmpty);
   const columnData = useData((state) => state.columnData);
   const connected = useData((state) => state.connected);
 
-  const formatData = (columnData: ColumnDataType[]) => {
-    if (!columnData || columnData.length === 0) return [];
-    const initialDate = columnData[0]?.timestamp;
-    if (!initialDate) return [];
-
-    return columnData.slice(-MAX_DATA_LENGTH).map((entry) => {
-      const transcurredTime = entry.timestamp - initialDate;
-      const formattedTime = formatTime(transcurredTime);
-      return {
-        time: formattedTime,
-        ...entry.temperatures.reduce<Record<string, number>>(
-          (acc, temp, index) => {
-            acc[`plate${index + 1}`] = temp;
-            return acc;
-          },
-          {},
-        ),
-      };
-    });
+  const formatData = (_columnData: ColumnDataType[]) => {
+    return [];
   };
 
   const columnDataFormatted = useMemo(
@@ -72,27 +53,24 @@ export function TemperaturesChart() {
   }
 
   return (
-    <ChartContainer config={chartConfig}>
+    <ChartContainer config={chartConfig} className="w-full">
       <LineChart
         accessibilityLayer
         data={chartData}
         margin={{
-          left: 21,
+          left: 20,
           right: 15,
           bottom: 40,
-          top: 5,
         }}
       >
         <CartesianGrid vertical={false} />
         <YAxis
           tickLine={false}
           tick={true}
-          tickMargin={8}
+          tickMargin={0}
           axisLine={false}
-          width={10}
-          interval={"equidistantPreserveStart"}
-          className="text-xs font-thin tracking-tight"
-          label={<Label value={"T(°C)"} position={{ x: 4, y: 5 }} />}
+          width={1}
+          hide
         />
         <XAxis
           dataKey="time"
@@ -101,12 +79,11 @@ export function TemperaturesChart() {
           tickMargin={10}
           interval={"equidistantPreserveStart"}
           minTickGap={15}
-          className="overflow-hidden text-xs font-thin tracking-tight"
           label={
             <Label
               value={"Time (min)"}
               position={"insideBottom"}
-              offset={-15}
+              offset={-19}
             />
           }
         />

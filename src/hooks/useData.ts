@@ -1,13 +1,7 @@
 import { create } from "zustand";
 import { MAX_DATA_LENGTH } from "@/constants";
 import { invokeTauri } from "@/adapters/tauri";
-
-type ColumnDataEntry = {
-  timestamp: number;
-  temperatures: number[];
-  compositions: number[];
-  percentageComplete: number;
-};
+import { ColumnDataEntry } from "@/types";
 
 type DataMode = "none" | "modbus" | "file" | "paused";
 
@@ -22,7 +16,6 @@ interface DataState {
   setLoading: (isLoading: boolean) => void;
   setFilePath: (filePath: string) => void;
   clearData: () => Promise<void>;
-  getTemperatureByIndex: (index: number) => string;
 }
 
 export const useData = create<DataState>((set) => ({
@@ -46,12 +39,6 @@ export const useData = create<DataState>((set) => ({
         fileProgress: columnData.percentageComplete,
       };
     }, true);
-  },
-  getTemperatureByIndex: (index: number) => {
-    const lastEntry = useData.getState().columnData.at(-1) as
-      | ColumnDataEntry
-      | undefined;
-    return lastEntry?.temperatures[index].toFixed(2) || "0.0";
   },
   setConnected: (connected: DataMode) => set(() => ({ connected })),
   setLoading: (isLoading: boolean) => set((state) => ({ ...state, isLoading })),

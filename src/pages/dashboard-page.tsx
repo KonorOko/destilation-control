@@ -3,6 +3,7 @@ import { useData } from "@/hooks/useData";
 import { ColumnDef } from "@tanstack/react-table";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { CompositionsSection } from "./compositions-section";
 import { TemperaturesSection } from "./temperatures-section";
 import { TowerSection } from "./tower-section";
@@ -23,10 +24,15 @@ export type ColumnDataType = {
 
 export function DashboardPage() {
   const setColumnData = useData((state) => state.setColumnData);
+  const setConnected = useData((state) => state.setConnected);
 
   useEffect(() => {
     const unlisten = listen<ColumnDataEntry>("column_data", (event) => {
       const handleListen = async () => {
+        if (event.payload.percentageComplete === 100) {
+          setConnected("paused");
+          toast.success("Playback complete!");
+        }
         setColumnData(event.payload);
       };
 
